@@ -13,6 +13,7 @@ import pytest
 
 from rayvision_utils.exception.exception import FileNameContainsChineseError
 from rayvision_utils.exception.exception import VersionNotMatchError
+from rayvision_utils.exception.exception import CGFileNotExistsError
 from rayvision_houdini.cg import Houdini
 
 
@@ -25,8 +26,9 @@ def test_init(houdini, tmpdir):
 
 def test_get_save_version(houdini, cg_file_h):
     """Test get_save_version function."""
-    result = houdini.get_save_version(cg_file_h["cg_file"])
-    assert bool(result) is False
+    # result = houdini.get_save_version(cg_file_h["cg_file"])
+    with pytest.raises(CGFileNotExistsError):
+        houdini.get_save_version(cg_file_h["cg_file"])
 
 
 def test_find_location(houdini, mocker, tmpdir):
