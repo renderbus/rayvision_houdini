@@ -12,13 +12,13 @@ def parse_requirements(filename):
 
 setup(
     name='rayvision_houdini',
-    author='RayVision',
+    author='Shenzhen Rayvision Technology Co., Ltd',
     author_email='developer@rayvision.com',
-    url='',
+    url='https://github.com/renderbus/rayvision_houdini',
     package_dir={'': '.'},
     packages=find_packages('.'),
     include_package_data=True,
-    description='',
+    description='A Python-based API for Using Renderbus cloud rendering service.',
     entry_points={},
     install_requires=list(parse_requirements('requirements.txt')),
     package_data={
