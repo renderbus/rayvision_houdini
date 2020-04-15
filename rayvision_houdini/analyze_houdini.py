@@ -40,7 +40,7 @@ class AnalyzeHoudini(object):
     def __init__(self, cg_file, software_version, project_name=None,
                  plugin_config=None, render_software="Houdini",
                  local_os=None, workspace=None, custom_exe_path=None,
-                 platform="2"):
+                 platform="2", custom_db_path=None):
         """Initialize and examine the analysis information.
 
         Args:
@@ -53,12 +53,14 @@ class AnalyzeHoudini(object):
             workspace (str): Analysis out of the result file storage path.
             custom_exe_path (str): Customize the exe path for the analysis.
             platform (str): Platform no.
+            custom_db_path (str): Custom database file location path.
 
         """
         self.logger = logging.getLogger(__name__)
 
         self.check_path(cg_file)
         self.cg_file = cg_file
+        self.custom_db_path = custom_db_path
 
         self.render_software = render_software
         self.software_version = software_version
@@ -187,7 +189,6 @@ class AnalyzeHoudini(object):
                 while not_find:
                     line = str(hipf.readline()).encode("utf-8")
                     if "set -g _HIP_SAVEVERSION = " in str(line):
-                        # print(str(line))
                         pattern = re.compile(r"\d+\.\d+\.\d+\.?\d+")
                         _HV = pattern.findall(str(line))
                         _hfs_save_version = _HV[0]
@@ -208,7 +209,7 @@ class AnalyzeHoudini(object):
             self.save_tips()
             raise CGFileNotExistsError(ERROR_CGFILE_NOTEXIST.format(
                 cg_file))
-        print("_hfs_save_version---%s" % _hfs_save_version)
+        self.logger.info("_hfs_save_version---%s" % _hfs_save_version)
         return _hfs_save_version
 
     def _get_install_path(self, version):
@@ -281,7 +282,7 @@ class AnalyzeHoudini(object):
                     for ver in version_list:
                         if b_ver in ver:
                             b_version = ver.split(" ")[-1]
-                            print("Match large version===>", b_version)
+                            self.logger.info("Match large version===>", b_version)
                             return self._get_install_path(b_version)
 
                     error_msg = "Your houdini Software version is not any match"
@@ -315,7 +316,7 @@ class AnalyzeHoudini(object):
             if not os.path.isfile(exe_path):
                 num = self.software_version[0:2] + ".0"
                 exe_path = "/opt/hfs%s/bin/hython-bin" % num
-            print("exe_path---%s" % exe_path)
+            self.logger.info("exe_path---%s" % exe_path)
         else:
             location = self.location_from_reg(self.software_version)
             tmp_exe_path = os.path.join(location, "bin", "hython.exe")
@@ -446,17 +447,19 @@ class AnalyzeHoudini(object):
         asset_path = self.asset_json.replace("\\", "/")
         tips_path = self.tips_json.replace("\\", "/")
         success_path = os.path.join(self.workspace, 'analyze_sucess')
+        db_path = self.custom_db_path
 
         cmd = ('"{exe_path}" "{script_full_path}" -project "{cg_file}" -task '
                '"{task_path}" -asset "{asset_path}" -tips '
-               '"{tips_path}" -success "{success_path}"').format(
+               '"{tips_path}" -success "{success_path}" -db "{db_path}"').format(
                    exe_path=exe_path,
                    script_full_path=analyze_script_path,
                    cg_file=self.cg_file,
                    task_path=task_path,
                    asset_path=asset_path,
                    tips_path=tips_path,
-                   success_path=success_path)
+                   success_path=success_path,
+                   db_path=db_path)
 
         self.logger.debug(cmd)
         code, _, _ = Cmd.run(cmd, shell=True)
