@@ -21,7 +21,7 @@ api = RayvisionAPI(access_id=render_para['access_id'],
                    domain=render_para['domain'],
                    platform=render_para['platform'])
 
-# Step1：Analyze CG File
+# Step1:Analyze CG File
 analyze_info = {
     "cg_file": r"D:\files\CG FILE\flip_test_slice4.hip",
     "workspace": "c:/workspace",
@@ -54,7 +54,7 @@ custom_info_to_upload = [
 append_to_upload(custom_info_to_upload, analyze_obj.upload_json)
 
 
-# step3：Check json files
+# step3:Check json files
 check_obj = RayvisionCheck(api, analyze_obj)
 task_id = check_obj.execute(analyze_obj.task_json, analyze_obj.upload_json)
 
@@ -78,19 +78,19 @@ and users can choose their own upload method according to the actual situation.
 """
 upload_method = 1
 if upload_method == 1:
-    # step3.1：Json files are uploaded in conjunction with CG resources
+    # step3.1:Json files are uploaded in conjunction with CG resources
     upload_obj.upload(str(task_id), **CONFIG_PATH)
 elif upload_method == 2:
-    # step3.2：CG resource files and json are uploaded separately
+    # step3.2:CG resource files and json are uploaded separately
     upload_obj.upload_asset(upload_json_path=CONFIG_PATH["upload_json_path"])
     upload_obj.upload_config(str(task_id), list(CONFIG_PATH.values()))
 
 
-# Step5：Submit Task
+# Step5:Submit Task
 api.submit(int(task_id))
 
 
-# Step6：Download
+# Step6:Download
 download = RayvisionDownload(api)
 # All complete before the automatic start of uniform download.
 # download.auto_download_after_task_completed([task_id])
