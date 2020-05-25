@@ -428,7 +428,7 @@ class AnalyzeHoudini(object):
 
         utils.json_save(self.upload_json, self.upload_info)
 
-    def analyse(self, no_upload=False):
+    def analyse(self, no_upload=False, exe_path=""):
         """Build a cmd command to perform an analysis.
 
         Args:
@@ -438,7 +438,8 @@ class AnalyzeHoudini(object):
             AnalyseFailError: Analysis scenario failed.
 
         """
-        exe_path = self.analyse_cg_file()
+        if not os.path.exists(exe_path):
+            exe_path = self.analyse_cg_file()
         analyse_script_name = "HfsBase.py"
         self.write_task_json()
         analyze_script_path = os.path.join(os.path.dirname(__file__),
