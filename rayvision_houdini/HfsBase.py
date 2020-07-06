@@ -43,6 +43,8 @@ class HoudiniAnalyse():
                 db_path = os.path.join(os.environ["USERPROFILE"], "renderfarm_sdk")
             else:
                 db_path = os.path.join(os.environ["HOME"], "renderfarm_sdk")
+        if not os.path.exists(db_path):
+            os.makedirs(db_path)
         return db_path
 
     def CreateBasedate(self):
