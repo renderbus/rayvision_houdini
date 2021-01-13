@@ -13,4 +13,4 @@ analyze_info = {
     }
 }
 
-AnalyzeHoudini(**analyze_info).analyse()
+AnalyzeHoudini(**analyze_info).analyse(exe_path="C:\Program Files\Side Effects Software\Houdini 17.0.506\bin\hython.exe")

@@ -4,28 +4,29 @@
 # Import built-in models
 from __future__ import print_function
 from __future__ import unicode_literals
-from builtins import str
 
-import logging
 import hashlib
+import logging
 import os
+import traceback
+
 import re
 import sys
 import time
-import traceback
+from builtins import str
 
-from rayvision_utils import utils
 from rayvision_utils import constants
+from rayvision_utils import utils
 from rayvision_utils.cmd import Cmd
 from rayvision_utils.exception import tips_code
-from rayvision_utils.exception.exception import CGExeNotExistError
-from rayvision_utils.exception.exception import CGFileNotExistsError
-from rayvision_utils.exception.exception import VersionNotMatchError
-from rayvision_utils.exception.exception import AnalyseFailError
-from rayvision_utils.exception.exception import FileNameContainsChineseError
-from rayvision_utils.exception.error_msg import VERSION_NOT_MATCH
 from rayvision_utils.exception.error_msg import ERROR9899_CGEXE_NOTEXIST
 from rayvision_utils.exception.error_msg import ERROR_CGFILE_NOTEXIST
+from rayvision_utils.exception.error_msg import VERSION_NOT_MATCH
+from rayvision_utils.exception.exception import AnalyseFailError
+from rayvision_utils.exception.exception import CGExeNotExistError
+from rayvision_utils.exception.exception import CGFileNotExistsError
+from rayvision_utils.exception.exception import FileNameContainsChineseError
+from rayvision_utils.exception.exception import VersionNotMatchError
 
 if not sys.platform.lower().startswith('lin'):
     try:
@@ -390,49 +391,12 @@ class AnalyzeHoudini(object):
                     hash_md5.update(data_flow)
         return hash_md5.hexdigest()
 
-    def write_upload_json(self):
-        """handle analyse result.
 
-        Save the analyzed scene file information and texture information to
-        the upload.json file.
-
-        """
-        upload_asset = []
-        normal = self.asset_info["Normal"]
-
-        self.upload_info["scene"] = [
-            {
-                "local": self.cg_file.replace("\\", "/"),
-                "server": utils.convert_path(self.cg_file),
-                "hash": self.get_file_md5(self.cg_file)
-            }
-        ]
-
-        for _, value in normal.items():
-            path_list = value[-1]
-            for path in path_list:
-                d = {}
-                local = path
-                server = utils.convert_path(local)
-                d["local"] = local.replace("\\", "/")
-                d["server"] = server
-                upload_asset.append(d)
-
-        # handle upload.json
-        upload_asset.append({
-            "local": self.cg_file.replace("\\", "/"),
-            "server": utils.convert_path(self.cg_file)
-        })
-
-        self.upload_info["asset"] = upload_asset
-
-        utils.json_save(self.upload_json, self.upload_info)
-
-    def analyse(self, no_upload=False, exe_path=""):
+    def analyse(self, exe_path=""):
         """Build a cmd command to perform an analysis.
 
         Args:
-            no_upload (bool): Do you not generate an upload,json file.
+            exe_path (string): custom rendering software absolute path.
 
         Raises:
             AnalyseFailError: Analysis scenario failed.
@@ -440,27 +404,15 @@ class AnalyzeHoudini(object):
         """
         if not os.path.exists(exe_path):
             exe_path = self.analyse_cg_file()
-        analyse_script_name = "HfsBase.py"
         self.write_task_json()
-        analyze_script_path = os.path.join(os.path.dirname(__file__),
-                                           analyse_script_name)
-        task_path = self.task_json.replace("\\", "/")
-        asset_path = self.asset_json.replace("\\", "/")
-        tips_path = self.tips_json.replace("\\", "/")
-        success_path = os.path.join(self.workspace, 'analyze_sucess')
-        db_path = self.custom_db_path
+        script_full_path = os.path.join(os.path.dirname(__file__), "run.py")
 
-        cmd = ('"{exe_path}" "{script_full_path}" -project "{cg_file}" -task '
-               '"{task_path}" -asset "{asset_path}" -tips '
-               '"{tips_path}" -success "{success_path}" -db "{db_path}"').format(
-                   exe_path=exe_path,
-                   script_full_path=analyze_script_path,
-                   cg_file=self.cg_file,
-                   task_path=task_path,
-                   asset_path=asset_path,
-                   tips_path=tips_path,
-                   success_path=success_path,
-                   db_path=db_path)
+        cmd = '"{exe_path}" "{script_full_path}" -file "{cg_file}" -path_json "{json_path}"'.format(
+            exe_path=exe_path,
+            script_full_path=script_full_path,
+            cg_file=self.cg_file,
+            json_path=self.workspace
+        )
 
         self.logger.debug(cmd)
         code, _, _ = Cmd.run(cmd, shell=True)
@@ -477,9 +429,4 @@ class AnalyzeHoudini(object):
             self.save_tips()
             raise AnalyseFailError(msg)
 
-        self.tips_info = utils.json_load(self.tips_json)
-        self.asset_info = utils.json_load(self.asset_json)
-        self.task_info = utils.json_load(self.task_json)
-        if not no_upload:
-            self.write_upload_json()
         return self
