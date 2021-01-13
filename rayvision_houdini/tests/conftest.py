@@ -11,26 +11,6 @@ References:
 import os, sys
 import pytest
 
-from rayvision_houdini.HfsSql import connectsl
-
-
-@pytest.fixture()
-def connect():
-    """Connect fixture."""
-    return connectsl()[0]
-
-
-@pytest.fixture()
-def cursor():
-    """cursor fixture."""
-    return connectsl()[1]
-
-
-@pytest.fixture()
-def refer_table():
-    """cursor fixture."""
-    return "ReFerType"
-
 
 @pytest.fixture()
 def cg_file_h(tmpdir):
