@@ -1,7 +1,7 @@
 rayvision_houdini
 ==================
 
-[![](https://img.shields.io/badge/pypi%20package-1.1.0-green)](https://pypi.org/project/rayvision-houdini/)
+[![](https://img.shields.io/badge/pypi%20package-1.3.0-green)](https://pypi.org/project/rayvision-houdini/)
 [![](https://img.shields.io/badge/docs--%E4%B8%AD%E6%96%87%E7%AE%80%E4%BD%93-latest-green)](https://renderbus.readthedocs.io/zh/latest)
 [![](https://img.shields.io/badge/docs--English-latest-green)](https://renderbus.readthedocs.io/en/latest)
 [![](https://img.shields.io/badge/license-Apache%202-blue)](http://www.apache.org/licenses/LICENSE-2.0.txt)

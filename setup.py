@@ -22,7 +22,7 @@ setup(
     entry_points={},
     install_requires=list(parse_requirements('requirements.txt')),
     package_data={
-        'rayvision_houdini': ['*.db'],
+        'rayvision_houdini': ["./hanalyse/*/*"],
     },
     classifiers=[
         'Programming Language :: Python',
