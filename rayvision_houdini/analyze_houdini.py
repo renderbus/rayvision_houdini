@@ -27,6 +27,8 @@ from rayvision_utils.exception.exception import CGExeNotExistError
 from rayvision_utils.exception.exception import CGFileNotExistsError
 from rayvision_utils.exception.exception import FileNameContainsChineseError
 from rayvision_utils.exception.exception import VersionNotMatchError
+from rayvision_houdini.constants import PACKAGE_NAME
+
 
 if not sys.platform.lower().startswith('lin'):
     try:
@@ -38,10 +40,21 @@ VERSION = sys.version_info[0]
 
 
 class AnalyzeHoudini(object):
-    def __init__(self, cg_file, software_version, project_name=None,
-                 plugin_config=None, render_software="Houdini",
-                 local_os=None, workspace=None, custom_exe_path=None,
-                 platform="2", custom_db_path=None):
+    def __init__(self, cg_file,
+                 software_version,
+                 project_name=None,
+                 plugin_config=None,
+                 render_software="Houdini",
+                 local_os=None,
+                 workspace=None,
+                 custom_exe_path=None,
+                 platform="2",
+                 custom_db_path=None,
+                 logger=None,
+                 log_folder=None,
+                 log_name=None,
+                 log_level="DEBUG"
+                 ):
         """Initialize and examine the analysis information.
 
         Args:
@@ -55,9 +68,17 @@ class AnalyzeHoudini(object):
             custom_exe_path (str): Customize the exe path for the analysis.
             platform (str): Platform no.
             custom_db_path (str): Custom database file location path.
-
+            logger (object, optional): Custom log object.
+            log_folder (str, optional): Custom log save location.
+            log_name (str, optional): Custom log file name.
+            log_level (string):  Set log level, example: "DEBUG","INFO","WARNING","ERROR".
         """
-        self.logger = logging.getLogger(__name__)
+        self.logger = logger
+        if not self.logger:
+            from rayvision_log.core import init_logger
+            init_logger(PACKAGE_NAME, log_folder, log_name)
+            self.logger = logging.getLogger(__name__)
+            self.logger.setLevel(level=log_level.upper())
 
         self.check_path(cg_file)
         self.cg_file = cg_file
@@ -273,7 +294,7 @@ class AnalyzeHoudini(object):
                 version_list.append(name)
                 i += 1
         except OSError:
-            logging.debug("User local houdini software versions===> %s" % version_list)
+            self.logger.debug("User local houdini software versions===> %s" % version_list)
         try:
             if len(version_list):
                 folder_name = "Houdini {}".format(version)
