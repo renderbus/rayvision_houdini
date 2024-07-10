@@ -8,7 +8,10 @@ References:
     https://docs.pytest.org/en/2.7.3/plugins.html
 
 """
-import os, sys
+
+import os
+import sys
+
 import pytest
 
 

@@ -11,19 +11,18 @@ References:
 
 import pytest
 
-from rayvision_utils.exception.exception import CGFileNotExistsError
 from rayvision_houdini.analyze_houdini import AnalyzeHoudini
+from rayvision_utils.exception.exception import CGExeNotExistError
 
 
-def test_get_save_version(houdini, cg_file_h):
+def test_get_save_version(houdini):
     """Test get_save_version function."""
-    # result = houdini.get_save_version(cg_file_h["cg_file"])
-    with pytest.raises(CGFileNotExistsError):
-        houdini.get_save_version(cg_file_h["cg_file"])
+    with pytest.raises(CGExeNotExistError):
+        houdini.find_location()
 
 
 def test_find_location(houdini, mocker, tmpdir):
-    """Test find_location action """
+    """Test find_location action."""
     mocker_cg_file = mocker.patch.object(AnalyzeHoudini, 'find_location')
     mocker_cg_file.return_value = tmpdir.join('muti_layer_test.hip')
     assert houdini.find_location() == str(tmpdir.join('muti_layer_test.hip'))

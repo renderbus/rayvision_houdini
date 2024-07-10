@@ -5,20 +5,21 @@
 from __future__ import print_function
 from __future__ import unicode_literals
 
+import shutil
+from builtins import str
+
 import hashlib
 import logging
 import os
-import traceback
-
 import re
 import sys
 import time
-from builtins import str
+import traceback
+import threading
 
 from rayvision_utils import constants
 from rayvision_utils import utils
 from rayvision_utils.cmd import Cmd
-from rayvision_utils.exception import tips_code
 from rayvision_utils.exception.error_msg import ERROR9899_CGEXE_NOTEXIST
 from rayvision_utils.exception.error_msg import ERROR_CGFILE_NOTEXIST
 from rayvision_utils.exception.error_msg import VERSION_NOT_MATCH
@@ -40,6 +41,8 @@ VERSION = sys.version_info[0]
 
 
 class AnalyzeHoudini(object):
+    """Houdini analyse."""
+
     def __init__(self, cg_file,
                  software_version,
                  project_name=None,
@@ -71,9 +74,11 @@ class AnalyzeHoudini(object):
             logger (object, optional): Custom log object.
             log_folder (str, optional): Custom log save location.
             log_name (str, optional): Custom log file name.
-            log_level (string):  Set log level, example: "DEBUG","INFO","WARNING","ERROR".
+            log_level (string):  Set log level, example: "DEBUG","INFO",
+              "WARNING","ERROR".
         """
         self.logger = logger
+        self.reg_strings = ["SOFTWARE\\Side Effects Software", "SOFTWARE\\SideFX\\"]
         if not self.logger:
             from rayvision_log.core import init_logger
             init_logger(PACKAGE_NAME, log_folder, log_name)
@@ -91,7 +96,7 @@ class AnalyzeHoudini(object):
 
         local_os = self.check_local_os(local_os)
         self.local_os = local_os
-        self.tmp_mark = str(int(time.time()))
+        self.tmp_mark = str(int(time.time())) + str(self.get_current_id())
         workspace = os.path.join(self.check_workspace(workspace),
                                  self.tmp_mark)
         if not os.path.exists(workspace):
@@ -108,12 +113,22 @@ class AnalyzeHoudini(object):
         self.tips_json = os.path.join(workspace, "tips.json")
         self.asset_json = os.path.join(workspace, "asset.json")
         self.upload_json = os.path.join(workspace, "upload.json")
+        self.analyse_success_file = os.path.join(workspace, "analyze_sucess")
+        if os.path.exists(self.analyse_success_file):
+            shutil.rmtree(self.analyse_success_file)
         self.tips_info = {}
         self.task_info = {}
         self.asset_info = {}
         self.upload_info = {}
 
         self.check_cg_name()
+
+    @staticmethod
+    def get_current_id():
+        if isinstance(threading.current_thread(), threading._MainThread):
+            return os.getpid()
+        else:
+            return threading.get_ident()
 
     @staticmethod
     def check_path(tmp_path):
@@ -131,8 +146,6 @@ class AnalyzeHoudini(object):
         if sys.version_info.major == "3":
             cg_file = self.cg_file
             if utils.check_contain_chinese(cg_file):
-                self.add_tip(tips_code.CONTAIN_CHINESE, cg_file)
-                self.save_tips()
                 raise FileNameContainsChineseError
 
     def add_tip(self, code, info):
@@ -191,139 +204,132 @@ class AnalyzeHoudini(object):
 
         return workspace
 
-    def get_save_version(self, cg_file):
-        """Check the CG version of the scene file .
-
-        Args:
-            cg_file (str): Scene file path.
-
-        Returns:
-            str: Create a CG software version of the scene file.
-                e.g.:
-                    "17.0.352".
-
-        """
-        if os.path.exists(cg_file):
-            with open(cg_file, "rb") as hipf:
-                not_find = True
-                search_elm = 2
-                search_elm_cunt = 0
-                while not_find:
-                    line = str(hipf.readline()).encode("utf-8")
-                    if "set -g _HIP_SAVEVERSION = " in str(line):
-                        pattern = re.compile(r"\d+\.\d+\.\d+\.?\d+")
-                        _HV = pattern.findall(str(line))
-                        _hfs_save_version = _HV[0]
-                        search_elm_cunt += 1
-
-                    # The $HIP val with this file saved
-                    if "set -g HIP = " in str(line):
-                        pattern = (re.compile("\\'.*\\'")
-                                   if sys.version[:1] == "2" else
-                                   re.compile(r"\\'.*\\'"))
-                        _Hip = pattern.search(str(line)).group()
-                        _hip_save_val = _Hip.split("\'")[1].replace("\\", "/")
-                        search_elm_cunt += 1
-                    if search_elm_cunt >= search_elm:
-                        not_find = False
-        else:
-            self.add_tip(tips_code.CGFILE_NOTEXISTS, cg_file)
-            self.save_tips()
-            raise CGFileNotExistsError(ERROR_CGFILE_NOTEXIST.format(
-                cg_file))
-        self.logger.info("_hfs_save_version---%s" % _hfs_save_version)
-        return _hfs_save_version
-
-    def _get_install_path(self, version):
-        location = None
-        version_str = "{0} {1}".format(self.render_software, version)
-        string = r'SOFTWARE\Side Effects Software\{0}'.format(version_str)
-        self.logger.debug(string)
-        try:
-            handle = self._win_regedit(string)
-            location, type = _winreg.QueryValueEx(handle, "InstallPath")
-            self.logger.debug("{0} {1}".format(location, type))
-
-        except (WindowsError, FileNotFoundError):
-            msg = traceback.format_exc()
-            self.logger.error(msg)
-
-        return location
-
-    @classmethod
-    def _win_regedit(cls, strings):
-        try:
-            return cls._win32_regedit(strings)
-        except Exception:
-            try:
-                return cls._win64_regedit(strings)
-            except Exception:
-                try:
-                    cls._win64_regedit("SOFTWARE")
-                except Exception as e:
-                    traceback.format_exc()
-                    raise e
-
     @staticmethod
     def _win32_regedit(strings):
         return _winreg.OpenKey(_winreg.HKEY_LOCAL_MACHINE, strings)
 
     @staticmethod
     def _win64_regedit(strings):
-        return _winreg.OpenKey(_winreg.HKEY_LOCAL_MACHINE, strings, 0,
-                               (_winreg.KEY_WOW64_64KEY + _winreg.KEY_ALL_ACCESS))
+        return _winreg.OpenKey(
+            _winreg.HKEY_LOCAL_MACHINE, strings, 0,
+            (_winreg.KEY_WOW64_64KEY + _winreg.KEY_ALL_ACCESS))
 
-    def location_from_reg(self, version):
-        """Get the software installation path from the registry.
-        When the smaller version does not match, it looks for the larger version,
-        If the larger version does not match, it throws an error
+    def _get_all_houdini_ver(self):
+        """Get all Houdini versions in the registry.
+
+        Returns (list): All Houdini versions.
+        """
+        soft_ver = []
+        for reg_string in self.reg_strings:
+            try:
+                self.logger.debug("reg_string %s", reg_string)
+                houdini_regedit = self._get_window_regedit(reg_string)
+                i = 0
+                while 1:
+                    name = _winreg.EnumKey(houdini_regedit, i)
+                    soft_ver.append(name)
+                    i += 1
+            except:
+                pass
+        if "Houdini" in soft_ver:
+            soft_ver.remove("Houdini")
+        self.logger.debug("soft_ver is : %s", soft_ver)
+        return soft_ver
+
+    @staticmethod
+    def _match_env(env, string):
+        """Get env string.
 
         Args:
-            version (str): CG software version.
+            env (str): Env name.
+            string (str): Env val.
 
-        Returns (str): CG software absolute path.
-
+        Returns (list): Env names.
         """
-        version_list = []
-        try:
-            handle = self._win_regedit(r'SOFTWARE\Side Effects Software')
-            i = 0
-            while 1:
-                name = _winreg.EnumKey(handle, i)
-                self.logger.debug("{}".format(name))
-                version_list.append(name)
-                i += 1
-        except OSError:
-            self.logger.debug("User local houdini software versions===> %s" % version_list)
-        try:
-            if len(version_list):
-                folder_name = "Houdini {}".format(version)
-                if folder_name not in version_list:
-                    s_ver = folder_name.split(".", maxsplit=2)
-                    b_ver = s_ver[0] + "." + s_ver[1]
-                    for ver in version_list:
-                        if b_ver in ver:
-                            b_version = ver.split(" ")[-1]
-                            self.logger.info("Match large version===>", b_version)
-                            return self._get_install_path(b_version)
+        if re.search(" %s " % env.upper(), string):
+            return re.findall("set -g %s = '(.*)'" % env.upper(), string)
 
-                    error_msg = "Your houdini Software version is not any match"
-                    self.logger.error("{}: {}".format(error_msg, version))
-                    self.add_tip(tips_code.CG_NOTMATCH, error_msg)
-                    self.save_tips()
-                    raise VersionNotMatchError(VERSION_NOT_MATCH.format(version))
-                else:
-                    return self._get_install_path(version)
+    def _get_file_save_ver(self):
+        """Get the version information in the scene file."""
+        max_search_line = 100
+        env_filter_list = {"_HIP_SAVEVERSION": ""}
+        with open(self.cg_file, 'rb') as file:
+            save_num = 0
+            for line in file:
+                line = utils.str2unicode(line)
+                if not line:
+                    continue
+                if save_num > max_search_line:
+                    for env_filter in env_filter_list:
+                        if not env_filter_list[env_filter]:
+                            self.logger.debug("#warning : not found \"{var}\" in search!\nmaybe you can try to change"
+                                              " max line args#".format(var=env_filter))
+                            env_filter_list[env_filter] = ""
+                    break
+
+                for key in env_filter_list:
+                    match = self._match_env(key, line)
+                    if match:
+                        env_filter_list[key] = match[0]
+
+                full_flag = 1
+                for env_filter in env_filter_list:
+                    if not env_filter_list[env_filter]:
+                        full_flag = 0
+
+                if full_flag:
+                    for env_filter in env_filter_list:
+                        self.logger.debug('%10s:%s' % (env_filter, env_filter_list[env_filter]))
+                    break
+                save_num += 1
+        return env_filter_list
+
+    @classmethod
+    def _get_window_regedit(cls, strings):
+        """Get the information in the specified registry path."""
+        try:
+            return cls._win32_regedit(strings)
+        except:
+            return cls._win64_regedit(strings)
+
+    def _get_install_path(self, ver):
+        """Get the value of InstallPath of the specified registry."""
+        location = ""
+        if ver:
+            for reg_string in self.reg_strings:
+                try:
+                    reg_path = "%s\\%s" % (reg_string, ver)
+                    install_info = self._get_window_regedit(reg_path)
+                    location = _winreg.QueryValueEx(install_info, "InstallPath")[0]
+                    break
+                except:
+                    pass
             else:
-                error_msg = "Cannot found any houdini version"
-                self.logger.error("{}: {}".format(error_msg, version))
-                if version != "":
-                    self.add_tip(tips_code.CG_NOTEXISTS, error_msg)
-                    self.save_tips()
-                    raise CGExeNotExistError(ERROR9899_CGEXE_NOTEXIST.format(version))
-        except Exception as e:
-            traceback.format_exc()
-            raise e
+                location = ""
+                self.logger.debug(location)
+                raise AnalyseFailError("No registry was added to the Houdini software path")
+        else:
+            raise AnalyseFailError("Your computer not install Houdini")
+        self.save_tips()
+        return location
+
+    def compare_the_version(self):
+        """Get the program path of Houdini."""
+        all_houdini_ver = self._get_all_houdini_ver()
+        hip_version_data = self._get_file_save_ver()
+        if hip_version_data["_HIP_SAVEVERSION"]:
+            file_save_ver = "Houdini {0}".format(hip_version_data["_HIP_SAVEVERSION"])
+        else:
+            raise AnalyseFailError("'HIP_SAVEVERSION' not found in scene file")
+
+        self.logger.debug("file_save_ver: %s %s", file_save_ver, all_houdini_ver)
+        if file_save_ver in all_houdini_ver:
+            self.logger.debug("file_save_ver: {}".format(file_save_ver))
+            exe_path = self._get_install_path(file_save_ver)
+            exe_path = os.path.join(exe_path, "bin", "hython.exe")
+        else:
+            exe_path = None
+        return exe_path, file_save_ver
 
     def find_location(self):
         """Get the path where the local Houdini startup file is located.
@@ -332,45 +338,30 @@ class AnalyzeHoudini(object):
             CGExeNotExistError: The path to the startup file does not exist.
 
         """
-        exe_path = None
         if self.local_os == "linux":
-            exe_path = "/opt/hfs%s/bin/hython-bin" % self.software_version
+            exe_path = "/opt/hfs%s/bin/hython" % self.software_version
+            num = self.software_version
             if not os.path.isfile(exe_path):
                 num = self.software_version[0:2] + ".0"
-                exe_path = "/opt/hfs%s/bin/hython-bin" % num
-            self.logger.info("exe_path---%s" % exe_path)
+                exe_path = "/opt/hfs%s/bin/hython" % num
+            file_save_ver = "Houdini %s" % num
+            self.logger.info("exe_path---%s", exe_path)
         else:
-            location = self.location_from_reg(self.software_version)
-            tmp_exe_path = os.path.join(location, "bin", "hython.exe")
-            if os.path.exists(tmp_exe_path):
-                exe_path = tmp_exe_path
-
-        if exe_path is None:
-            error_msg = "Software of scene has not been found"
-            self.add_tip(tips_code.CG_NOTEXISTS, error_msg)
-            self.save_tips()
+            exe_path, file_save_ver = self.compare_the_version()
+        if exe_path is None or not os.path.exists(exe_path):
             raise CGExeNotExistError(ERROR9899_CGEXE_NOTEXIST.format(
-                self.render_software))
+                file_save_ver))
 
         self.logger.info("exe_path: %s", exe_path)
         return exe_path
 
     def analyse_cg_file(self):
-        """ analyse cg file.
+        """Analyse cg file.
 
-        Analyze the scene file to get the path to the startup file of the CG
-        software.
+        Analyze the scene file to get the path to the startup file of
+          the CG software.
 
         """
-        # Find the version from the cg file
-        version = self.get_save_version(self.cg_file)
-        self.logger.info("version: %s", version)
-
-        if version != self.software_version:
-            self.add_tip(tips_code.CG_NOTMATCH, "{0} {1}".format(
-                self.render_software, self.software_version))
-            self.save_tips()
-
         if self.custom_exe_path is not None:
             exe_path = self.custom_exe_path
         else:
@@ -378,11 +369,14 @@ class AnalyzeHoudini(object):
         return exe_path
 
     def write_task_json(self):
-        """The initialization task.json."""
-        constants.TASK_INFO["task_info"]["input_cg_file"] = self.cg_file.replace("\\", "/")
+        """Initialize task.json."""
+        constants.TASK_INFO["task_info"]["input_cg_file"] = \
+            self.cg_file.replace("\\", "/")
         constants.TASK_INFO["task_info"]["project_name"] = self.project_name
-        constants.TASK_INFO["task_info"]["cg_id"] = constants.CG_SETTING.get(self.render_software.capitalize())
-        constants.TASK_INFO["task_info"]["os_name"] = "1" if self.local_os == "windows" else "0"
+        constants.TASK_INFO["task_info"]["cg_id"] = constants.CG_SETTING.get(
+            self.render_software.capitalize())
+        constants.TASK_INFO["task_info"]["os_name"] = "1" \
+            if self.local_os == "windows" else "0"
         constants.TASK_INFO["task_info"]["platform"] = self.platform
         constants.TASK_INFO["software_config"] = {
             "plugins": self.plugin_config,
@@ -400,7 +394,8 @@ class AnalyzeHoudini(object):
                 return False, msg
         return True, None
 
-    def get_file_md5(self, file_path):
+    @staticmethod
+    def get_file_md5(file_path):
         """Generate the md5 values for the scenario."""
         hash_md5 = hashlib.md5()
         if os.path.exists(file_path):
@@ -411,7 +406,6 @@ class AnalyzeHoudini(object):
                         break
                     hash_md5.update(data_flow)
         return hash_md5.hexdigest()
-
 
     def analyse(self, exe_path=""):
         """Build a cmd command to perform an analysis.
@@ -428,26 +422,23 @@ class AnalyzeHoudini(object):
         self.write_task_json()
         script_full_path = os.path.join(os.path.dirname(__file__), "run.py")
 
-        cmd = '"{exe_path}" "{script_full_path}" -file "{cg_file}" -path_json "{json_path}"'.format(
-            exe_path=exe_path,
-            script_full_path=script_full_path,
-            cg_file=self.cg_file,
-            json_path=self.workspace
-        )
+        cmd = '"{exe_path}" "{script_full_path}" -file "{cg_file}"' \
+              ' -path_json "{json_path}"'.format(
+                exe_path=exe_path,
+                script_full_path=script_full_path,
+                cg_file=self.cg_file,
+                json_path=self.workspace
+              )
 
         self.logger.debug(cmd)
         code, _, _ = Cmd.run(cmd, shell=True)
-        if code != 0:
-            self.add_tip(tips_code.UNKNOW_ERR, "")
-            self.save_tips()
-            raise AnalyseFailError
+        if not os.path.exists(self.analyse_success_file):
+            raise AnalyseFailError("Analyse failed, please check!")
 
         # Determine whether the analysis is successful by
         #  determining whether a json file is generated.
         status, msg = self.check_result()
         if status is False:
-            self.add_tip(tips_code.UNKNOW_ERR, msg)
-            self.save_tips()
             raise AnalyseFailError(msg)
 
         return self

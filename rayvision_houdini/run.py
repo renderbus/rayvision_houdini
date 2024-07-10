@@ -1,4 +1,6 @@
 # -*- coding:UTF-8 -*-
+"""Run analyse file."""
+
 import os
 import sys
 

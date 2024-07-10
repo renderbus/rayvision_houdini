@@ -1,9 +1,12 @@
-#! /usr/bin/env python
-#coding=utf-8
-import sys
-import os
+# ! /usr/bin/env python
+# coding=utf-8
 
-script_version = "py" + "".join([str(i) for i in sys.version_info[:1]])
+"""Call the analysis script of the corresponding Python version."""
+
+import os
+import sys
+
+script_version = "py" + "".join([str(i) for i in sys.version_info[:2]])
 script_path = os.path.join(os.path.dirname(__file__))
 
 sys.path.append(script_path)
