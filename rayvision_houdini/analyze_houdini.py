@@ -92,7 +92,7 @@ class AnalyzeHoudini(object):
         self.render_software = render_software
         self.software_version = software_version
         self.project_name = project_name
-        self.plugin_config = plugin_config
+        self.plugin_config = plugin_config if plugin_config else {}
 
         local_os = self.check_local_os(local_os)
         self.local_os = local_os
@@ -407,11 +407,84 @@ class AnalyzeHoudini(object):
                     hash_md5.update(data_flow)
         return hash_md5.hexdigest()
 
-    def analyse(self, exe_path=""):
+    def write_upload_json(self):
+        """Generate the upload.json."""
+        assets = self.asset_info["asset"]
+        upload_asset = []
+
+        self.upload_info["scene"] = [
+            {
+                "local": self.cg_file.replace("\\", "/"),
+                "server": utils.convert_path(self.cg_file),
+                "hash": self.get_file_md5(self.cg_file)
+            }
+        ]
+
+        for path in assets:
+            resources = {}
+            local = path.split("  (mtime")[0]
+            server = utils.convert_path(local)
+            resources["local"] = local.replace("\\", "/")
+            resources["server"] = server
+            upload_asset.append(resources)
+
+        # Add the cg file to upload.json
+        upload_asset.append({
+            "local": self.cg_file.replace("\\", "/"),
+            "server": utils.convert_path(self.cg_file)
+        })
+
+        self.upload_info["asset"] = upload_asset
+
+        utils.json_save(self.upload_json, self.upload_info)
+
+    def get_geo_node_dict(self):
+        """Get all render geo node"""
+        task_json_dict = utils.json_load(self.task_json)
+        geo_node_dict = {}
+        scene_info_render = task_json_dict.get('scene_info_render', {})
+        if 'geo_node' in scene_info_render:
+            for geo_node in scene_info_render.get('geo_node'):
+                if geo_node.get('render') == '1':
+                    geo_node_dict.update(
+                        {geo_node.get('node'): ""}
+                    )
+        return geo_node_dict
+
+    def set_geo_node_order(self, geo_node_dict):
+        """Set geo node dependency.
+        
+        Args:
+            geo_node_dict(dict): all render geo node dict.
+        """
+        if not geo_node_dict:
+            self.logger.error("geo_node_dict is none: {}".format(geo_node_dict))
+            return
+        sort_list = []
+        task_json_dict = utils.json_load(self.task_json)
+
+        scene_info_render = task_json_dict.get('scene_info_render', {})
+        task_info_dict = task_json_dict.get('task_info', {})
+        sort_list = [int(geo_node_dict[item]) for item in geo_node_dict.keys() if geo_node_dict[item].strip()]
+        expect_list = [item for item in range(1, len(geo_node_dict)+1)]
+        if (len(sort_list) != len(geo_node_dict)) or (sorted(sort_list) != sorted(expect_list)):
+            self.logger.error("Have the wrong sort: {}".format(geo_node_dict))
+            return
+        for node_dict in scene_info_render['geo_node']:
+            if node_dict.get('node') in geo_node_dict.keys():
+                node_dict.update(
+                    {'geoDependencySort': geo_node_dict[node_dict.get('node')]}
+                )
+        task_info_dict.update({'multi_node': "0", 'geo_node_dependency': "1"})
+        utils.json_save(self.task_json, task_json_dict)
+        self.logger.info("geo_node_dict is: {}".format(geo_node_dict))
+
+    def analyse(self, exe_path="", no_upload=False):
         """Build a cmd command to perform an analysis.
 
         Args:
             exe_path (string): custom rendering software absolute path.
+            no_upload (bool): Do you not generate an upload,json file.
 
         Raises:
             AnalyseFailError: Analysis scenario failed.
@@ -441,4 +514,8 @@ class AnalyzeHoudini(object):
         if status is False:
             raise AnalyseFailError(msg)
 
-        return self
+        self.tips_info = utils.json_load(self.tips_json)
+        self.asset_info = utils.json_load(self.asset_json)
+        self.task_info = utils.json_load(self.task_json)
+        if not no_upload:
+            self.write_upload_json()
